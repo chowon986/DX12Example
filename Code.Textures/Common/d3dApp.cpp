@@ -366,30 +366,77 @@ bool D3DApp::InitMainWindow()
 {
 	WNDCLASS wc;
 	wc.style         = CS_HREDRAW | CS_VREDRAW;
+	// 윈도우 스타일 옵션을 지정 (윈도우 변경 시 업데이트 여부 설정)
+	// CS_HREDRAW : 수평 폭에 대해 윈도우를 다시 그림 (수평 : Horizontality)
+	// CS_VREDRAW : 수직 폭에 대해 윈도우를 다시 그림 (수직 : Vertical)
+	
 	wc.lpfnWndProc   = MainWndProc; 
+	// lpfnWndProc 윈도우에서 발생되는 메시지를 어느 함수에서 처리할지 메시지 처리함수의 주소를 받음
+	
 	wc.cbClsExtra    = 0;
-	wc.cbWndExtra    = 0;
-	wc.hInstance     = mhAppInst;
-	wc.hIcon         = LoadIcon(0, IDI_APPLICATION);
-	wc.hCursor       = LoadCursor(0, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
-	wc.lpszMenuName  = 0;
-	wc.lpszClassName = L"MainWnd";
+	// 윈도우 클래스에서 사용할 여분 메모리를 바이트로 지정
 
-	if( !RegisterClass(&wc) )
+	wc.cbWndExtra    = 0;
+	// 개별 윈도우에서 사용할 여분 메모리 영역 지정
+
+	wc.hInstance     = mhAppInst;
+	// 윈도우 클래스가 사용하는 인스턴스 핸들
+
+	wc.hIcon         = LoadIcon(0, IDI_APPLICATION);
+	// 아이콘 모양 지정
+	// IDI_APPLICATION : 기본 아이콘
+	// https://learn.microsoft.com/ko-kr/windows/win32/api/winuser/nf-winuser-loadicona
+
+	wc.hCursor       = LoadCursor(0, IDC_ARROW);
+	// LoadCursor의 첫번째 인자는 커서를 가지고 있는 프로그램의 인스턴스 핸들 (Default NULL)
+	// 마우스 커서 모양 지정
+	// IDC_ARROW : 화살표 모양
+	// http://www.soen.kr/lecture/win32api/lec2/lec2-3-2.htm
+
+	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+	// GetStockObject 함수 : 윈도우즈가 기본적으로 제공하는 브러시, 펜 등의 핸들을 구해주는 함수
+	// 인자로 색을 받음 (예) WHITE_BRUSH, BLACK_BRUSH
+	// 그러나 YELLOW_BRUSH, RED_BRUSH 등 윈도우즈가 제공하는 브러시가 아닌 경우에는 변경이 안 됨
+	// -> 별도의 방법을 사용해야 함
+
+	wc.lpszMenuName  = 0;
+	// 이 프로그램이 사용할 메뉴 지정
+	// 메뉴를 사용하지 않을 경우 NULL 대입
+	wc.lpszClassName = L"MainWnd";
+	// 윈도우 클래스의 이름을 정의
+
+	if( !RegisterClass(&wc) ) // RegisterClass의 인자로 WndClass 구조체의 번지를 넘겨주면 됨 -> 이러한 특성을 가진 윈도우를 사용하겠다는 등록 과정
 	{
 		MessageBox(0, L"RegisterClass Failed.", 0, 0);
 		return false;
 	}
 
 	// Compute window rectangle dimensions based on requested client area dimensions.
-	RECT R = { 0, 0, mClientWidth, mClientHeight };
-    AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);
+	// 요청한 클라이언트 영역 치수를 기준으로 창 직사각형 치수를 계산합니다. 
+	//RECT R = { 0, 0, mClientWidth, mClientHeight };
+    
+	RECT R = { 0,0, 2560, 720 };
+	
+	AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);
+	// 첫번째 인자 : RECT 구조체에 대한 포인터
+	// 두번째 인자 : 필요한 크기를 계산할 창의 스타일 
+	// WS_OVERLAPPEDWINDOW : 메뉴, 최대화, 최소화, 제목 표시줄 프레임을 포함한 윈도우 -> google.com/?hl=ko
+	// 세번째 인자 : 창에 메뉴가 있는지 여부를 나타냄
+
 	int width  = R.right - R.left;
 	int height = R.bottom - R.top;
 
 	mhMainWnd = CreateWindow(L"MainWnd", mMainWndCaption.c_str(), 
 		WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0, mhAppInst, 0); 
+	// 첫번째 인자 : 생성하고자하는 윈도우의 클래스를 지정하는 문자열 -> 앞에서 정의한 WndClass 구조체의 lpszClassName 기입
+	// 두번째 인자 : 윈도우의 타이틀 바에 나타날 문자열
+	// 세번째 인자 : 만들고자 하는 윈도우 형태 지정
+	// 네번째 인자 ~ 일곱번째 인자 : 윈도우의 크기(Width, Height)와 위치(X, Y)를 지정
+	// 여덟번째 인자 : 부모 윈도우가 있는 경우 부모 윈도우의 핸들 지정
+	// 아홉번째 인자 : 윈도우에서 사용할 메뉴의 핸들 지정, NULL로 지정하면 WndClass에서 지정한 메뉴 그대로 사용
+	// 열번째 인자 : 프로그램의 핸들 지정 (WinMain의 인수로 전달된 hInstance 대입)
+	// 열한번째 인자 : 특수한 목적에 사용 -> 보통 NULL 입력
+	
 	if( !mhMainWnd )
 	{
 		MessageBox(0, L"CreateWindow Failed.", 0, 0);
@@ -397,7 +444,11 @@ bool D3DApp::InitMainWindow()
 	}
 
 	ShowWindow(mhMainWnd, SW_SHOW);
+	// 첫번째 인자 : 화면으로 출력하고자 하는 윈도우의 핸들
+	// 두번째 인자 : 윈도우를 화면에 출력하는 방법
+	// SW_SHOW : 윈도우를 활설화시켜 보여준다. -> http://www.soen.kr/lecture/win32api/lec2/lec2-2-2.htm
 	UpdateWindow(mhMainWnd);
+	// 갱신할 영역이 있으면 시스템의 상태와 상관없이 즉각 갱신하라고 명령하는 함수
 
 	return true;
 }

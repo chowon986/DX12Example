@@ -11,6 +11,7 @@
 #include "../../Common/d3dApp.h"
 #include "../../Common/MathHelper.h"
 #include "../../Common/UploadBuffer.h"
+#include <random>
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -36,6 +37,9 @@ public:
 	~BoxApp();
 
 	virtual bool Initialize()override;
+
+public:
+    XMFLOAT4X4 tempWorld = MathHelper::Identity4x4();
 
 private:
     virtual void OnResize()override;
@@ -87,14 +91,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 #if defined(DEBUG) | defined(_DEBUG)
 	_CrtSetDbgFlag( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );
 #endif
+    //{
+    //    BoxApp theApp(hInstance);
+    //    theApp.tempWorld._41 = 2;
+    //    if (!theApp.Initialize())
+    //        return 0;
+
+    //    return theApp.Run();
+    //}
+
+    //{
+    //    BoxApp theApp(hInstance);
+    //    theApp.tempWorld._41 = -2;
+    //    if (!theApp.Initialize())
+    //        return 0;
+
+    //    return theApp.Run();
+    //}
 
     try
     {
-        BoxApp theApp(hInstance);
-        if(!theApp.Initialize())
-            return 0;
+        {
+            BoxApp theApp(hInstance);
+            theApp.tempWorld._41 = 0;
+            if (!theApp.Initialize())
+                return 0;
 
-        return theApp.Run();
+            return theApp.Run();
+        }
     }
     catch(DxException& e)
     {
@@ -114,6 +138,7 @@ BoxApp::~BoxApp()
 
 bool BoxApp::Initialize()
 {
+
     if(!D3DApp::Initialize())
 		return false;
 		
@@ -162,7 +187,7 @@ void BoxApp::Update(const GameTimer& gt)
     XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
     XMStoreFloat4x4(&mView, view);
 
-    XMMATRIX world = XMLoadFloat4x4(&mWorld);
+    XMMATRIX world = XMLoadFloat4x4(&tempWorld);
     XMMATRIX proj = XMLoadFloat4x4(&mProj);
     XMMATRIX worldViewProj = world*view*proj;
 
@@ -196,22 +221,24 @@ void BoxApp::Draw(const GameTimer& gt)
     // Specify the buffers we are going to render to.
 	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 
-	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap.Get() };
-	mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+    {
+        ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap.Get() };
+        mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
+        mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 
-	mCommandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexBufferView());
-	mCommandList->IASetIndexBuffer(&mBoxGeo->IndexBufferView());
-    mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    
-    mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+        mCommandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexBufferView());
+        mCommandList->IASetIndexBuffer(&mBoxGeo->IndexBufferView());
+        mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    mCommandList->DrawIndexedInstanced(
-		mBoxGeo->DrawArgs["box"].IndexCount, 
-		1, 0, 0, 0);
-	
-    // Indicate a state transition on the resource usage.
+        mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+
+        mCommandList->DrawIndexedInstanced(
+            mBoxGeo->DrawArgs["box"].IndexCount,
+            1, 0, 0, 0);
+    }
+
+	// Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
 
@@ -281,9 +308,20 @@ void BoxApp::BuildDescriptorHeaps()
 {
     D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
     cbvHeapDesc.NumDescriptors = 1;
+    // 힙에 있는 설명자의 수
+
     cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    // 힙의 설명자 형식을 지정
+    // D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV : 상수 버퍼, 셰이더 리소스 및 순서가 지정되지 않은 액세스 뷰의 조합에 대한 설명자 힙
+    // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_descriptor_heap_type
+
     cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    // 단일 어댑터 작업인 경우 0으로 설정
+    // 여러 어댑터 노드가 있는 경우 디스크립터 힙이 적용되는 노드를 식별하도록 비트를 설정
+    // D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : 선택적으로 설명자 힙에 설정하여 셰이더에서 참조하기 위해 명령 목록에 바인딩되었음을 나타낼 수 있음
+
 	cbvHeapDesc.NodeMask = 0;
+
     ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&cbvHeapDesc,
         IID_PPV_ARGS(&mCbvHeap)));
 }
@@ -424,7 +462,6 @@ void BoxApp::BuildBoxGeometry()
 	mBoxGeo->VertexBufferByteSize = vbByteSize;
 	mBoxGeo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	mBoxGeo->IndexBufferByteSize = ibByteSize;
-
 	SubmeshGeometry submesh;
 	submesh.IndexCount = (UINT)indices.size();
 	submesh.StartIndexLocation = 0;
